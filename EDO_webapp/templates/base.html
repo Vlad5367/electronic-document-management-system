@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>СЭД</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<header class="header">
+    <div class="container header-inner">
+        <a class="logo" href="{{ url_for('home') }}">СЭД</a>
+        <nav class="nav">
+            <a class="{{ 'is-active' if request.endpoint == 'home' else '' }}" href="{{ url_for('home') }}">Главная</a>
+            <a class="{{ 'is-active' if request.endpoint == 'index' else '' }}" href="{{ url_for('index') }}">Документы</a>
+            <a class="{{ 'is-active' if request.endpoint == 'create' else '' }}" href="{{ url_for('create') }}">Создать</a>
+            <a class="{{ 'is-active' if request.endpoint == 'upload' else '' }}" href="{{ url_for('upload') }}">Загрузка</a>
+            <a class="{{ 'is-active' if request.endpoint == 'archive' else '' }}" href="{{ url_for('archive') }}">Архив</a>
+            <a class="{{ 'is-active' if request.endpoint == 'logs' else '' }}" href="{{ url_for('logs') }}">Журнал</a>
+            {% if session.get('user_role') == 'admin' %}
+                <a class="{{ 'is-active' if request.endpoint in ('admin_users',) else '' }}" href="{{ url_for('admin_users') }}">Админ‑панель</a>
+            {% endif %}
+            {% if session.get('user_id') %}
+                <a href="{{ url_for('logout') }}">Выход</a>
+            {% endif %}
+        </nav>
+    </div>
+</header>
+
+<main class="content">
+    <div class="container">
+        {% block content %}{% endblock %}
+    </div>
+</main>
+
+</body>
+</html>

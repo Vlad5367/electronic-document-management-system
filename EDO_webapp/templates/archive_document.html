@@ -1,0 +1,84 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<h1>{{ doc.title }}</h1>
+
+<div class="card">
+    {% set p = (doc.file_path|default('')|lower)|replace('\\', '/') %}
+    {% set can_preview = p.endswith('.pdf') or p.endswith('.png') or p.endswith('.jpg') or p.endswith('.jpeg') %}
+
+    <p>
+        <b>Дата создания:</b>
+        {{ doc.created_at|kras_dt('%d.%m.%Y %H:%M') if doc.created_at else '—' }}
+    </p>
+
+    <p>
+        <b>Автор:</b>
+        {{ author.username if author else '—' }}
+    </p>
+
+    <hr>
+
+    {% if doc.file_path %}
+        {% if p.endswith('.pdf') %}
+            <iframe
+                src="{{ url_for('view_file', filename=file_name) }}"
+                width="100%"
+                height="500px"
+                style="border:1px solid var(--border); border-radius:12px;">
+            </iframe>
+
+        {% elif p.endswith('.png') or p.endswith('.jpg') or p.endswith('.jpeg') %}
+            <img
+                src="{{ url_for('view_file', filename=file_name) }}"
+                style="max-width:100%; border-radius:8px;">
+
+        {% else %}
+            <p style="color: var(--muted);">
+                Предпросмотр недоступен для данного формата. Скачайте файл.
+            </p>
+        {% endif %}
+    {% else %}
+        <p style="color: var(--muted);">Файл не прикреплён</p>
+    {% endif %}
+
+    <div style="margin-top: 25px; display:flex; gap:10px; flex-wrap:wrap;">
+        <a class="btn" href="{{ url_for('download_document', doc_id=doc.id) }}">Скачать</a>
+        <a class="btn secondary" href="{{ url_for('archive') }}">Назад</a>
+
+        <form method="post" action="{{ url_for('purge_document', doc_id=doc.id) }}" style="margin:0;">
+            <button class="btn danger" type="submit" onclick="return confirm('Удалить документ навсегда? Это действие нельзя отменить.')">
+                Удалить навсегда
+            </button>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <h3 style="margin-top:0;">Примечания</h3>
+
+    <form method="post" action="{{ url_for('add_note_archive', doc_id=doc.id) }}">
+        <label>Текст</label>
+        <textarea name="text" rows="3" placeholder="Короткое примечание..." required></textarea>
+        <button class="btn secondary" type="submit">Добавить</button>
+    </form>
+
+    <hr>
+
+    <ul class="list">
+        {% for n in notes %}
+            <li>
+                <div style="font-weight:800;">{{ n.username or '—' }}</div>
+                <div style="color: var(--muted); font-size: 12px;">
+                    {{ n.created_at|kras_dt('%d.%m.%Y %H:%M') if n.created_at else '' }}
+                </div>
+                <div style="margin-top: 8px;">{{ n.text }}</div>
+            </li>
+        {% else %}
+            <li style="color: var(--muted);">Примечаний пока нет</li>
+        {% endfor %}
+    </ul>
+</div>
+
+{% endblock %}
+

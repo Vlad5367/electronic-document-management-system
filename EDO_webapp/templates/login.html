@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Вход — СЭД</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="auth-shell">
+    <div class="card auth-card">
+        <h2 class="auth-title">Вход в систему</h2>
+
+        {% with messages = get_flashed_messages() %}
+          {% if messages %}
+            <div class="flash">{{ messages[0] }}</div>
+          {% endif %}
+        {% endwith %}
+
+        <form method="post">
+            <label>Логин</label>
+            <input type="text" name="username" placeholder="Введите логин" required>
+
+            <label>Пароль</label>
+            <input type="password" name="password" placeholder="Введите пароль" required>
+
+            <button class="btn" type="submit">Войти</button>
+        </form>
+    </div>
+</div>
+
+</body>
+</html>

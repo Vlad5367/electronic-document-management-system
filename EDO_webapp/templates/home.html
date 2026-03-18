@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<div class="home-hero">
+    <h1>Система электронного документооборота</h1>
+    <p class="subtitle">
+        Быстрый доступ к документам, загрузке файлов, архиву и журналу действий — всё в одном месте.
+    </p>
+</div>
+
+<div class="home-grid">
+    <a class="home-tile" href="{{ url_for('index') }}">
+        <h3>📄 Документы</h3>
+        <p>Просмотр и управление документами</p>
+    </a>
+
+    <a class="home-tile" href="{{ url_for('create') }}">
+        <h3>📝 Создание</h3>
+        <p>Создание документа по шаблону</p>
+    </a>
+
+    <a class="home-tile" href="{{ url_for('upload') }}">
+        <h3>⬆ Загрузка</h3>
+        <p>Добавление внешних файлов</p>
+    </a>
+
+    <a class="home-tile" href="{{ url_for('archive') }}">
+        <h3>🗄 Архив</h3>
+        <p>Архивные документы</p>
+    </a>
+
+    <a class="home-tile" href="{{ url_for('search') }}">
+        <h3>🔍 Поиск</h3>
+        <p>Поиск и фильтрация</p>
+    </a>
+
+    <a class="home-tile" href="{{ url_for('logs') }}">
+        <h3>📜 Журнал</h3>
+        <p>История действий</p>
+    </a>
+
+    {% if session.get('user_role') == 'admin' %}
+    <a class="home-tile" href="{{ url_for('admin_users') }}">
+        <h3>🛡 Админ‑панель</h3>
+        <p>Добавление и удаление пользователей</p>
+    </a>
+    {% endif %}
+</div>
+
+{% endblock %}

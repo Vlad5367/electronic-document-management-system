@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<h1>Журнал действий</h1>
+
+<div class="card">
+    <table class="doc-table">
+        <tr>
+            <th>Дата</th>
+            <th>Пользователь</th>
+            <th>Действие</th>
+            <th>Документ</th>
+        </tr>
+        {% for item in items %}
+            <tr>
+                <td>{{ item.created_at|kras_dt('%d.%m.%Y %H:%M') }}</td>
+                <td>{{ item.username or '—' }}</td>
+                <td>{{ item.message }}</td>
+                <td>
+                    {% if item.document_id %}
+                        <a class="link" href="{{ url_for('document_view', doc_id=item.document_id) }}">
+                            {{ item.document_title or ('#' ~ item.document_id) }}
+                        </a>
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+            </tr>
+        {% else %}
+            <tr>
+                <td colspan="4">Записей пока нет</td>
+            </tr>
+        {% endfor %}
+    </table>
+</div>
+
+{% endblock %}

@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="card">
+  <h1>Админ‑панель: пользователи</h1>
+
+  {% with messages = get_flashed_messages() %}
+    {% if messages %}
+      <div class="flash-list">
+        {% for message in messages %}
+          <div class="flash">{{ message }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  <h2 style="margin-top: 18px;">Добавление пользователя</h2>
+  <form method="post" action="{{ url_for('admin_users_create') }}" class="form">
+    <div class="form-row">
+      <label>Логин</label>
+      <input name="username" maxlength="100" required>
+    </div>
+    <div class="form-row">
+      <label>Пароль</label>
+      <input name="password" type="password" required>
+    </div>
+    <div class="form-row">
+      <label>Роль</label>
+      <select name="role">
+        <option value="user" selected>user</option>
+        <option value="admin">admin</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label>Пароль администратора (подтверждение)</label>
+      <input name="admin_password" type="password" required>
+    </div>
+    <button type="submit" class="btn">Создать</button>
+  </form>
+
+  <h2 style="margin-top: 26px;">Список</h2>
+  <div style="overflow:auto;">
+    <table class="doc-table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Логин</th>
+          <th>Роль</th>
+          <th>Действия</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in users %}
+          <tr>
+            <td>{{ u.id }}</td>
+            <td>{{ u.username }}</td>
+            <td>{{ u.role }}</td>
+            <td>
+              <form method="post" action="{{ url_for('admin_users_delete', user_id=u.id) }}" class="js-del-user" data-username="{{ u.username }}" style="display:inline;">
+                <input name="admin_password" type="hidden" value="">
+                <button type="submit" class="btn danger small">Удалить</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<script>
+  (function () {
+    const forms = document.querySelectorAll('form.js-del-user');
+    for (const form of forms) {
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        const username = form.getAttribute('data-username') || '';
+        if (!confirm('Удалить пользователя ' + username + '?')) return;
+        const pwd = prompt('Введите пароль администратора для подтверждения') || '';
+        if (!pwd) return;
+        const input = form.querySelector('input[name="admin_password"]');
+        if (input) input.value = pwd;
+        form.submit();
+      });
+    }
+  })();
+</script>
+
+{% endblock %}

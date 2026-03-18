@@ -1,0 +1,371 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<h1>{{ doc.title }}</h1>
+
+<div class="card">
+    {% set p = (doc.file_path|default('')|lower)|replace('\\', '/') %}
+    {% set can_preview = p.endswith('.pdf') or p.endswith('.png') or p.endswith('.jpg') or p.endswith('.jpeg') %}
+
+    <p><b>Тип:</b> {{ doc.doc_type }}</p>
+
+    <p>
+        <b>Дата создания:</b>
+        {{ doc.created_at|kras_dt('%d.%m.%Y %H:%M') }}
+    </p>
+
+    <p>
+        <b>Автор:</b>
+        {{ author.username if author else '—' }}
+    </p>
+
+    <hr>
+
+{# ===== Предпросмотр ===== #}
+{% if doc.file_path %}
+    
+    {% if p.endswith('.pdf') %}
+        <iframe
+            src="{{ url_for('view_file', filename=file_name) }}"
+            width="100%"
+            height="500px"
+            style="border:1px solid var(--border); border-radius:12px;">
+        </iframe>
+
+    {% elif p.endswith('.png') or p.endswith('.jpg') or p.endswith('.jpeg') %}
+        <img
+            src="{{ url_for('view_file', filename=file_name) }}"
+            style="max-width:100%; border-radius:8px;">
+
+    {% else %}
+        <p style="color: var(--muted);">
+            Предпросмотр недоступен для данного формата. Скачайте файл, либо загрузите PDF/изображение.
+        </p>
+    {% endif %}
+
+{% else %}
+    <p style="color: var(--muted);">
+        Файл не прикреплён
+    </p>
+{% endif %}
+
+    <hr>
+
+    <h3 style="margin-top:0;">Примечания</h3>
+    <form method="post" action="{{ url_for('add_note', doc_id=doc.id) }}">
+        <label>Текст</label>
+        <textarea name="text" rows="3" placeholder="Короткое примечание..." required></textarea>
+        <button class="btn secondary" type="submit">Добавить</button>
+    </form>
+
+    <ul class="list" style="margin-top:12px;">
+        {% for n in notes %}
+            <li>
+                <div style="font-weight:800;">{{ n.username or '—' }}</div>
+                <div style="color: var(--muted); font-size: 12px;">
+                    {{ n.created_at|kras_dt('%d.%m.%Y %H:%M') if n.created_at else '' }}
+                </div>
+                <div style="margin-top: 8px;">{{ n.text }}</div>
+            </li>
+        {% else %}
+            <li style="color: var(--muted);">Примечаний пока нет</li>
+        {% endfor %}
+    </ul>
+
+
+    <input class="modal-toggle" type="checkbox" id="sign-modal">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="sign-modal-title">
+        <label class="modal-backdrop" for="sign-modal" aria-label="Закрыть"></label>
+        <div class="modal-panel">
+            <h2 class="modal-title" id="sign-modal-title">Подписание документа</h2>
+            <p class="modal-subtitle">
+                Поддерживаемые форматы факсимиле: PNG, JPG, JPEG. Изображение будет показано ниже.
+            </p>
+
+            {% if not can_preview %}
+                <div class="hint">
+                    Подпись факсимиле пока поддерживается только для PDF/PNG/JPG/JPEG.
+                    Для DOCX и других форматов нужно предварительное преобразование в PDF.
+                </div>
+                <div class="modal-actions">
+                    <label class="btn secondary" for="sign-modal">Закрыть</label>
+                </div>
+            {% else %}
+            <form method="post" action="{{ url_for('sign_document', doc_id=doc.id) }}" enctype="multipart/form-data">
+                <input type="hidden" name="placement_mode" id="placement_mode" value="free">
+                <input type="hidden" name="norm_x" id="norm_x" value="0.70">
+                <input type="hidden" name="norm_y" id="norm_y" value="0.80">
+                <input type="hidden" name="norm_w" id="norm_w" value="0.28">
+
+                {% if facsimiles and facsimiles|length > 0 %}
+                    <label>Сохранённые факсимиле</label>
+                    <div class="facsimile-grid">
+                        {% for f in facsimiles %}
+                            <label class="facsimile-item">
+                                <input type="radio" name="facsimile_id" value="{{ f.id }}">
+                                <span class="facsimile-thumb">
+                                    <img src="{{ url_for('facsimile_png', facsimile_id=f.id) }}" alt="Факсимиле">
+                                </span>
+                                <span class="facsimile-name">{{ f.name }}</span>
+                                <button class="btn danger small fac-del"
+                                        type="submit"
+                                        form="del-fac-{{ f.id }}"
+                                        onclick="return confirm('Удалить это факсимиле?')">
+                                    Удалить
+                                </button>
+                            </label>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+
+                <label>Загрузить новое факсимиле (PNG/JPG/JPEG)</label>
+                <input id="signature-input" name="signature" type="file" accept=".png,.jpg,.jpeg">
+
+                <img id="signature-preview" class="signature-preview" alt="Предпросмотр подписи" style="display:none;">
+
+                <label>Расположение на документе (перетащи подпись мышкой)</label>
+                <div id="sign-stage" class="sign-stage">
+                    <div id="sign-canvas" class="sign-canvas">
+                        <img id="doc-preview" class="sign-doc" src="{{ url_for('sign_preview', doc_id=doc.id) }}" alt="Предпросмотр документа">
+                        <div id="sig-overlay-wrap" class="sign-sig-wrap" style="display:none;">
+                            <img id="sig-overlay" class="sign-sig" alt="Подпись">
+                            <span class="sign-handle tl" data-handle="tl"></span>
+                            <span class="sign-handle tr" data-handle="tr"></span>
+                            <span class="sign-handle bl" data-handle="bl"></span>
+                            <span class="sign-handle br" data-handle="br"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="hint">
+                    Подсказка: перетаскивай подпись мышкой, масштабируй за уголки. Можно ещё масштабировать
+                    колесиком мыши, удерживая <b>Shift</b>.
+                </div>
+
+                <div class="modal-actions">
+                    <button class="btn" type="submit">Подписать</button>
+                    <label class="btn secondary" for="sign-modal">Отмена</label>
+                </div>
+            </form>
+
+            {% if facsimiles and facsimiles|length > 0 %}
+                {% for f in facsimiles %}
+                    <form id="del-fac-{{ f.id }}" method="post" action="{{ url_for('delete_facsimile', facsimile_id=f.id) }}" style="display:none;">
+                        <input type="hidden" name="return_doc_id" value="{{ doc.id }}">
+                    </form>
+                {% endfor %}
+            {% endif %}
+
+            <script>
+                (function () {
+                    const stage = document.getElementById('sign-stage');
+                    const canvas = document.getElementById('sign-canvas');
+                    const docPreview = document.getElementById('doc-preview');
+                    const sigWrap = document.getElementById('sig-overlay-wrap');
+                    const sigOverlay = document.getElementById('sig-overlay');
+                    const normX = document.getElementById('norm_x');
+                    const normY = document.getElementById('norm_y');
+                    const normW = document.getElementById('norm_w');
+
+                    const input = document.getElementById('signature-input');
+                    const preview = document.getElementById('signature-preview');
+                    if (!input || !preview) return;
+
+                    function setOverlaySrc(src) {
+                        sigOverlay.src = src;
+                        sigWrap.style.display = 'block';
+                        // initial placement based on hidden values
+                        updateOverlayFromHidden();
+                    }
+
+                    function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+
+                    function updateHiddenFromOverlay() {
+                        if (!canvas || !sigWrap) return;
+                        const rect = canvas.getBoundingClientRect();
+                        const s = sigWrap.getBoundingClientRect();
+                        const x = (s.left - rect.left) / rect.width;
+                        const y = (s.top - rect.top) / rect.height;
+                        normX.value = clamp(x, 0, 1).toFixed(4);
+                        normY.value = clamp(y, 0, 1).toFixed(4);
+                        normW.value = clamp(s.width / rect.width, 0.08, 0.90).toFixed(4);
+                    }
+
+                    function updateOverlayFromHidden() {
+                        if (!canvas || !sigWrap) return;
+                        const rect = canvas.getBoundingClientRect();
+                        const x = parseFloat(normX.value || '0.7') * rect.width;
+                        const y = parseFloat(normY.value || '0.8') * rect.height;
+                        const w = parseFloat(normW.value || '0.28') * rect.width;
+                        sigWrap.style.left = `${x}px`;
+                        sigWrap.style.top = `${y}px`;
+                        sigWrap.style.width = `${w}px`;
+                    }
+
+                    input.addEventListener('change', function (e) {
+                        const file = e.target.files && e.target.files[0];
+                        if (!file) {
+                            preview.style.display = 'none';
+                            preview.removeAttribute('src');
+                            return;
+                        }
+                        const reader = new FileReader();
+                        reader.onload = function (ev) {
+                            preview.src = ev.target.result;
+                            preview.style.display = 'block';
+                            setOverlaySrc(ev.target.result);
+                        };
+                        reader.readAsDataURL(file);
+                    });
+
+                    const radios = document.querySelectorAll('input[name="facsimile_id"]');
+                    radios.forEach(radio => radio.addEventListener('change', function (ev) {
+                        // When selecting existing: clear upload, but show preview from saved facsimile
+                        input.value = '';
+                        const img = ev.target.closest('.facsimile-item')?.querySelector('img');
+                        if (img?.src) {
+                            preview.src = img.src;
+                            preview.style.display = 'block';
+                            setOverlaySrc(img.src);
+                        }
+                    }));
+
+                    // Drag & resize overlay within stage (mouse + touch)
+                    let mode = null; // 'drag' | 'resize'
+                    let handle = null; // tl,tr,bl,br
+                    let startX = 0, startY = 0;
+                    let baseLeft = 0, baseTop = 0, baseW = 0;
+
+                    function begin(ev, nextMode, nextHandle) {
+                        if (!sigWrap || sigWrap.style.display === 'none') return;
+                        mode = nextMode;
+                        handle = nextHandle || null;
+                        const e = ev.touches ? ev.touches[0] : ev;
+                        startX = e.clientX;
+                        startY = e.clientY;
+                        const s = sigWrap.getBoundingClientRect();
+                        const r = canvas.getBoundingClientRect();
+                        baseLeft = s.left - r.left;
+                        baseTop = s.top - r.top;
+                        baseW = s.width;
+                        ev.preventDefault();
+                    }
+
+                    function move(ev) {
+                        if (!mode) return;
+                        const e = ev.touches ? ev.touches[0] : ev;
+                        const dx = e.clientX - startX;
+                        const dy = e.clientY - startY;
+                        const r = canvas.getBoundingClientRect();
+                        const s = sigWrap.getBoundingClientRect();
+                        const curH = s.height;
+
+                        let left = baseLeft;
+                        let top = baseTop;
+                        let w = baseW;
+
+                        if (mode === 'drag') {
+                            left = clamp(baseLeft + dx, 0, r.width - s.width);
+                            top = clamp(baseTop + dy, 0, r.height - s.height);
+                        } else if (mode === 'resize') {
+                            // Resize based on corner handle, keep aspect ratio by width only
+                            const dir = (handle === 'tl' || handle === 'bl') ? -1 : 1;
+                            w = clamp(baseW + dx * dir, 60, r.width * 0.9);
+                            // For left handles, shift left to keep corner anchored
+                            if (handle === 'tl' || handle === 'bl') {
+                                left = clamp(baseLeft - (w - baseW), 0, r.width - w);
+                            } else {
+                                left = clamp(baseLeft, 0, r.width - w);
+                            }
+                            // For top handles, shift top slightly so it feels anchored
+                            if (handle === 'tl' || handle === 'tr') {
+                                // keep bottom anchored approximately (based on current height ratio)
+                                const newH = curH * (w / Math.max(baseW, 1));
+                                top = clamp(baseTop - (newH - curH), 0, r.height - newH);
+                            } else {
+                                top = clamp(baseTop, 0, r.height - curH);
+                            }
+                        }
+
+                        sigWrap.style.left = `${left}px`;
+                        sigWrap.style.top = `${top}px`;
+                        if (mode === 'resize') sigWrap.style.width = `${w}px`;
+
+                        updateHiddenFromOverlay();
+                        ev.preventDefault();
+                    }
+
+                    function end() { mode = null; handle = null; }
+
+                    // Drag by grabbing the image itself
+                    sigWrap.addEventListener('mousedown', (ev) => {
+                        if (ev.target && ev.target.classList && ev.target.classList.contains('sign-handle')) return;
+                        begin(ev, 'drag');
+                    });
+                    sigWrap.addEventListener('touchstart', (ev) => begin(ev, 'drag'), { passive: false });
+
+                    // Resize by handles
+                    sigWrap.querySelectorAll('.sign-handle').forEach(h => {
+                        h.addEventListener('mousedown', (ev) => begin(ev, 'resize', h.dataset.handle));
+                        h.addEventListener('touchstart', (ev) => begin(ev, 'resize', h.dataset.handle), { passive: false });
+                    });
+
+                    window.addEventListener('mousemove', move, { passive: false });
+                    window.addEventListener('touchmove', move, { passive: false });
+                    window.addEventListener('mouseup', end);
+                    window.addEventListener('touchend', end);
+
+                    // Shift + wheel to scale
+                    stage.addEventListener('wheel', function (ev) {
+                        if (!ev.shiftKey) return;
+                        if (!sigWrap || sigWrap.style.display === 'none') return;
+                        const r = canvas.getBoundingClientRect();
+                        const s = sigWrap.getBoundingClientRect();
+                        const delta = ev.deltaY > 0 ? -1 : 1;
+                        const nextW = clamp(s.width + delta * 18, 60, r.width * 0.9);
+                        // Scale around center
+                        const cx = (s.left - r.left) + s.width / 2;
+                        const cy = (s.top - r.top) + s.height / 2;
+                        const left = clamp(cx - nextW / 2, 0, r.width - nextW);
+                        sigWrap.style.width = `${nextW}px`;
+                        sigWrap.style.left = `${left}px`;
+                        sigWrap.style.top = `${clamp(cy - sigWrap.getBoundingClientRect().height / 2, 0, r.height - sigWrap.getBoundingClientRect().height)}px`;
+                        updateHiddenFromOverlay();
+                        ev.preventDefault();
+                    }, { passive: false });
+
+                    // When preview loads, ensure overlay uses correct sizing
+                    docPreview.addEventListener('load', function () {
+                        updateOverlayFromHidden();
+                    });
+                })();
+            </script>
+            {% endif %}
+        </div>
+    </div>
+
+    <div style="margin-top: 25px; display:flex; gap:10px; flex-wrap:wrap;">
+        <a class="btn" href="{{ url_for('download_document', doc_id=doc.id) }}">
+            Скачать
+        </a>
+
+        {% if can_preview %}
+            <label class="btn" for="sign-modal">Подписать</label>
+        {% else %}
+            <span class="btn secondary" style="opacity:0.7; cursor:not-allowed;">Подписать</span>
+        {% endif %}
+
+        <a class="btn secondary" href="{{ url_for('index') }}">
+            Назад
+        </a>
+
+        <a class="btn danger"
+           href="{{ url_for('delete_document', doc_id=doc.id) }}"
+           onclick="return confirm('Переместить документ в архив?')">
+            В архив
+        </a>
+    </div>
+
+</div>
+
+{% endblock %}

@@ -1,0 +1,84 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<h1>Архив документов</h1>
+
+<div class="card">
+    <form class="filters" method="get" action="{{ url_for('archive') }}">
+        <div class="filters-grid">
+            <div>
+                <label>Название</label>
+                <input type="text" name="q" placeholder="Например: приказ, договор..." value="{{ q or '' }}">
+            </div>
+
+            <div>
+                <label>Дата от</label>
+                <input type="date" name="date_from" value="{{ date_from or '' }}">
+            </div>
+
+            <div>
+                <label>Дата до</label>
+                <input type="date" name="date_to" value="{{ date_to or '' }}">
+            </div>
+
+            <div>
+                <label>Формат</label>
+                <select name="fmt">
+                    <option value="all" {{ 'selected' if (fmt or 'all') == 'all' else '' }}>Любой</option>
+                    <option value="pdf" {{ 'selected' if fmt == 'pdf' else '' }}>PDF</option>
+                    <option value="png" {{ 'selected' if fmt == 'png' else '' }}>PNG</option>
+                    <option value="jpg" {{ 'selected' if fmt == 'jpg' else '' }}>JPG</option>
+                    <option value="jpeg" {{ 'selected' if fmt == 'jpeg' else '' }}>JPEG</option>
+                    <option value="none" {{ 'selected' if fmt == 'none' else '' }}>Без файла</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="filters-actions">
+            <button class="btn" type="submit">Найти</button>
+            <a class="btn secondary" href="{{ url_for('archive') }}">Сбросить</a>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <table class="doc-table">
+        <tr>
+            <th>Название</th>
+            <th>Формат</th>
+            <th>Дата</th>
+            <th></th>
+        </tr>
+
+        {% for doc in documents %}
+        <tr>
+            <td>{{ doc.title }}</td>
+            <td>
+                {% if doc.file_path and '.' in doc.file_path %}
+                    {{ doc.file_path.rsplit('.', 1)[-1].upper() }}
+                {% else %}
+                    —
+                {% endif %}
+            </td>
+            <td>
+                {{ doc.created_at|kras_dt('%d.%m.%Y %H:%M') if doc.created_at else '—' }}
+            </td>
+            <td>
+                <a class="link" href="{{ url_for('archive_document_view', doc_id=doc.id) }}">Открыть</a>
+                <form class="inline-form" method="post" action="{{ url_for('purge_document', doc_id=doc.id) }}">
+                    <button class="btn danger small" type="submit"
+                            onclick="return confirm('Удалить документ навсегда? Это действие нельзя отменить.')">
+                        Удалить
+                    </button>
+                </form>
+            </td>
+        </tr>
+        {% else %}
+        <tr>
+            <td colspan="4">Архив пуст</td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+
+{% endblock %}

@@ -1,0 +1,255 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<h1>Создание</h1>
+
+<div class="card">
+    <h3 style="margin-top:0;">Создать шаблон</h3>
+
+    <form id="template-form" method="post">
+        <input type="hidden" name="action" id="template_action" value="save_template">
+        <input type="hidden" name="template_id" id="edit_template_id" value="">
+        <input type="hidden" name="fields_json" id="fields_json" value="[]">
+
+        <label>Редактировать существующий шаблон (необязательно)</label>
+        <select id="edit_template_select">
+            <option value="" selected>— Новый шаблон —</option>
+            {% for t in templates %}
+                <option value="{{ t.id }}">{{ t.name }}</option>
+            {% endfor %}
+        </select>
+
+        <label>Название шаблона</label>
+        <input type="text" name="template_name" id="template_name" placeholder="Например: Приказ (универсальный)" required>
+
+        <label>Основной текст (можно вставлять поля как {{ '{{field_key}}' }})</label>
+        <textarea name="base_text" id="base_text" rows="8" placeholder="Текст документа...&#10;&#10;Например: Я, {{ '{{employee_name}}' }}, принят(а) на должность {{ '{{position}}' }} с {{ '{{start_date}}' }}." required></textarea>
+
+        <div class="grid-2">
+            <div>
+                <label>Ключ поля (латиница/цифры/_)</label>
+                <input id="new_field_key" type="text" placeholder="employee_name">
+            </div>
+            <div>
+                <label>Название поля</label>
+                <input id="new_field_label" type="text" placeholder="ФИО сотрудника">
+            </div>
+        </div>
+
+        <label>Значение по умолчанию (необязательно)</label>
+        <input id="new_field_default" type="text" placeholder="Иванов Иван Иванович">
+
+        <div id="field_error" class="hint" style="display:none; margin-top:10px;"></div>
+
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button class="btn secondary" type="button" id="add_field_btn">Добавить поле</button>
+            <button class="btn secondary" type="button" id="clear_fields_btn">Очистить поля</button>
+        </div>
+
+        <div class="card" style="margin-top:14px;">
+            <div style="font-weight:800; margin-bottom:10px;">Поля шаблона</div>
+            <div id="fields_list" style="color: var(--muted);">Пока полей нет</div>
+        </div>
+
+        <button class="btn" type="submit" id="template_submit_btn">Сохранить шаблон</button>
+    </form>
+</div>
+
+<div class="card">
+    <h3 style="margin-top:0;">Создать документ по шаблону</h3>
+
+    <form id="doc-form" method="post">
+        <input type="hidden" name="action" value="create_from_template">
+
+        <label>Шаблон</label>
+        <select name="template_id" id="template_id" required>
+            <option value="" selected disabled>Выберите шаблон...</option>
+            {% for t in templates %}
+                <option value="{{ t.id }}">{{ t.name }}</option>
+            {% endfor %}
+        </select>
+
+        <label>Название документа</label>
+        <input type="text" name="doc_title" placeholder="Например: Приказ о приёме" required>
+
+        <div id="template_fields_area" class="card" style="margin-top:14px;">
+            <div style="color: var(--muted);">Выберите шаблон — появятся поля для заполнения.</div>
+        </div>
+
+        <button class="btn" type="submit">Сформировать PDF</button>
+    </form>
+</div>
+
+<script type="application/json" id="templates-data">{{ templates_payload|tojson }}</script>
+
+<script>
+    {% raw %}
+    (function () {
+        // ----- template builder -----
+        const fields = [];
+        const fieldsJson = document.getElementById('fields_json');
+        const fieldsList = document.getElementById('fields_list');
+        const addBtn = document.getElementById('add_field_btn');
+        const clearBtn = document.getElementById('clear_fields_btn');
+        const errBox = document.getElementById('field_error');
+        const editSelect = document.getElementById('edit_template_select');
+        const actionInput = document.getElementById('template_action');
+        const editTemplateId = document.getElementById('edit_template_id');
+        const submitBtn = document.getElementById('template_submit_btn');
+        const nameInput = document.getElementById('template_name');
+        const baseText = document.getElementById('base_text');
+
+        const keyInput = document.getElementById('new_field_key');
+        const labelInput = document.getElementById('new_field_label');
+        const defInput = document.getElementById('new_field_default');
+
+        function normKey(k) {
+            k = (k || '').trim();
+            k = k.replace(/\s+/g, '_');
+            // allow unicode letters/digits too (server-side supports this)
+            k = k.replace(/[^\p{L}\p{N}_-]/gu, '');
+            return k.slice(0, 40);
+        }
+
+        function showErr(msg) {
+            if (!errBox) return;
+            if (!msg) {
+                errBox.style.display = 'none';
+                errBox.textContent = '';
+                return;
+            }
+            errBox.style.display = 'block';
+            errBox.textContent = msg;
+        }
+
+        function renderFields() {
+            fieldsJson.value = JSON.stringify(fields);
+            if (!fields.length) {
+                fieldsList.innerHTML = 'Пока полей нет';
+                return;
+            }
+            fieldsList.innerHTML = fields.map((f, idx) => `
+                <div style="display:flex; gap:10px; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border);">
+                    <div>
+                        <div style="font-weight:800;">${f.label} <span style="color: var(--muted); font-weight:700;">({{${f.key}}})</span></div>
+                        ${f.default ? `<div style="color: var(--muted); font-size:12px;">по умолчанию: ${f.default}</div>` : ''}
+                    </div>
+                    <button class="btn danger small" type="button" data-del="${idx}">Удалить</button>
+                </div>
+            `).join('');
+
+            fieldsList.querySelectorAll('button[data-del]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const i = parseInt(btn.getAttribute('data-del'), 10);
+                    fields.splice(i, 1);
+                    renderFields();
+                });
+            });
+        }
+
+        addBtn.addEventListener('click', () => {
+            const key = normKey(keyInput.value);
+            const label = (labelInput.value || '').trim().slice(0, 80);
+            const def = (defInput.value || '').trim().slice(0, 200);
+            if (!key || !label) {
+                showErr('Заполните «Ключ поля» и «Название поля». (Ключ: буквы/цифры/`_`/`-`.)');
+                return;
+            }
+            if (fields.some(f => f.key === key)) {
+                showErr('Поле с таким ключом уже добавлено.');
+                return;
+            }
+            showErr('');
+            fields.push({ key, label, default: def });
+            keyInput.value = '';
+            labelInput.value = '';
+            defInput.value = '';
+            renderFields();
+        });
+
+        clearBtn.addEventListener('click', () => {
+            fields.splice(0, fields.length);
+            showErr('');
+            renderFields();
+        });
+
+        renderFields();
+
+        // ----- create from template -----
+        const templatesArr = JSON.parse(document.getElementById('templates-data')?.textContent || '[]');
+        const templates = Object.fromEntries((templatesArr || []).map(t => [String(t.id), t]));
+
+        function setModeNew() {
+            if (actionInput) actionInput.value = 'save_template';
+            if (editTemplateId) editTemplateId.value = '';
+            if (submitBtn) submitBtn.textContent = 'Сохранить шаблон';
+        }
+
+        function setModeEdit(id) {
+            if (actionInput) actionInput.value = 'update_template';
+            if (editTemplateId) editTemplateId.value = String(id || '');
+            if (submitBtn) submitBtn.textContent = 'Сохранить изменения';
+        }
+
+        function loadTemplateToBuilder(id) {
+            const t = templates[String(id)];
+            if (!t) return;
+
+            if (nameInput) nameInput.value = t.name || '';
+            if (baseText) baseText.value = t.base_text || '';
+
+            const arr = parseFieldsJson(t.fields || '[]');
+            fields.splice(0, fields.length, ...arr.map(f => ({
+                key: String(f.key || ''),
+                label: String(f.label || ''),
+                default: String(f.default || '')
+            })));
+            showErr('');
+            renderFields();
+        }
+
+        if (editSelect) {
+            editSelect.addEventListener('change', () => {
+                const id = editSelect.value;
+                if (!id) {
+                    // switch to "new template" mode but don't wipe user's inputs
+                    setModeNew();
+                    return;
+                }
+                setModeEdit(id);
+                loadTemplateToBuilder(id);
+            });
+        }
+
+        const tplSelect = document.getElementById('template_id');
+        const area = document.getElementById('template_fields_area');
+
+        function parseFieldsJson(fieldsJsonStr) {
+            try {
+                const arr = JSON.parse(fieldsJsonStr || '[]');
+                return Array.isArray(arr) ? arr : [];
+            } catch (e) {
+                return [];
+            }
+        }
+
+        tplSelect.addEventListener('change', () => {
+            const id = tplSelect.value;
+            const entry = templates[id];
+            const arr = parseFieldsJson(entry ? entry.fields : '[]');
+            if (!arr.length) {
+                area.innerHTML = '<div style="color: var(--muted);">У этого шаблона нет полей. Можно сразу сформировать PDF.</div>';
+                return;
+            }
+            area.innerHTML = arr.map(f => `
+                <div style="margin-bottom:10px;">
+                    <label>${f.label} <span style="color: var(--muted); font-weight:700;">({{${f.key}}})</span></label>
+                    <input type="text" name="field_${f.key}" placeholder="${(f.default || '').replaceAll('"', '&quot;')}">
+                </div>
+            `).join('');
+        });
+    })();
+    {% endraw %}
+</script>
+
+{% endblock %}

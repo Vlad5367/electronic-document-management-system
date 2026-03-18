@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<h1>Поиск документов</h1>
+
+<div class="card">
+    <form class="search-form">
+        <div>
+            <label>Запрос</label>
+            <input type="text" placeholder="Название или номер">
+        </div>
+        <div>
+            <label>Статус</label>
+            <select>
+                <option>Любой статус</option>
+                <option>Черновик</option>
+                <option>Утверждён</option>
+                <option>На согласовании</option>
+            </select>
+        </div>
+        <button type="submit">Найти</button>
+    </form>
+</div>
+
+{% endblock %}
